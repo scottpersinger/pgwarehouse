@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "pgwarehouse"
+version = "0.1.0"
+description = "Postgres to data warehouse sync tool."
+authors = ["Scott Persinger <scottpersinger@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pyyaml = "^6.0"
+python-dotenv = "^1.0.0"
+clickhouse-driver = "^0.2.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
