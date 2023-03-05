@@ -3,9 +3,11 @@ from collections import OrderedDict
 import glob
 import gzip
 from clickhouse_driver import Client as ClickhouseClient
+import clickhouse_driver
 import logging
 import os
 import platform
+import psycopg2
 import sys
 import re
 import subprocess
@@ -45,25 +47,38 @@ class PGWarehouse:
             self.backend = SnowflakeBackend(warehouse_config, self)
 
         def get_table_opts(tablename):
-            if tablename in self.config['tables'] and isinstance(self.config['tables'].get(tablename), dict):
-                return self.config['tables'].get(tablename)
-            else:
-                return {}
+            for t in self.config.get('tables', []):
+                if t == tablename:
+                    return {}
+                elif isinstance(t, dict) and tablename in t:
+                    return t[tablename]
+            return {}
 
+        def get_all_tables():
+            if 'tables' in self.config:
+                return self.config['tables']
+            else:
+                return self.all_table_names()
+            
         tables:list = []
-        if table:
+        if table == 'all':
+            print(f"============== {command} ALL TABLES =========== ")
+            for table in get_all_tables():
+                self.table_opts = {table: get_table_opts(table)}
+                self.table = table
+                self.schema_file = os.path.join(self.data_dir, table + ".schema")
+                print(f">>>>>>>>> {command} {table}")
+                try:
+                    getattr(self, command)(self.table, self.table_opts)
+                except RuntimeError:
+                    print(f"ERROR: {command} {table}")
+                    traceback.print_exc()
+            print("============== DONE =========== ")
+        elif table:
             self.table_opts = {table: get_table_opts(table)}
             self.table = table
             self.schema_file = os.path.join(self.data_dir, table + ".schema")
             getattr(self, command)(self.table, self.table_opts)
-        elif table == 'all':
-            print(f"============== {command} ALL TABLES =========== ")
-            for table in self.config['tables']:
-                self.table_opts = {table: get_table_opts(table)}
-                self.table = table
-                self.schema_file = os.path.join(self.data_dir, table, ".schema")
-                getattr(self, command)(self.table, self.table_opts)
-            print("============== DONE =========== ")
         elif command in ['list', 'listwh']:
             getattr(self, command)()
         else:
@@ -82,6 +97,12 @@ class PGWarehouse:
             setattr(self, key, val)
             os.environ[key.upper()] = val
         self.pgschema = conf.get('pgschema', os.environ.get('PGSCHEMA', 'public'))
+        self.max_pg_records = conf.get('max_records', None)
+        self.client = psycopg2.connect(
+            f"host={self.pghost} dbname={self.pgdatabase} user={self.pguser} password={self.pgpassword}",
+            connect_timeout=2
+        )
+        self.cursor: psycopg2.extensions.cursor = self.client.cursor()
 
     def list(self) -> None:
         sql = """
@@ -101,6 +122,12 @@ class PGWarehouse:
         """
         sql = sql.strip().replace("\n", " ")
         print(return_output(f"psql -c \"{sql}\""))
+
+    def all_table_names(self):
+        self.cursor.execute(
+            f"select table_name from information_schema.tables where table_schema='{self.pgschema}'"
+        )
+        return sorted([r[0] for r in self.cursor.fetchall()])
 
     def dump_schema(self, table: str, schema_file: str):
         ret = os.system(f"psql --pset=format=unaligned -c \"\\d {table}\" > {schema_file}")
@@ -140,19 +167,21 @@ class PGWarehouse:
                 total_records += 1
             outfile.write(strline) # [:-1] to cut off newline char
             current_size += len(strline)
-            if current_size > max_size:
+            if current_size > max_size or (self.max_pg_records and total_records >= self.max_pg_records):
                 outfile.close()
                 file_suffix += 1
                 outfile = next_file()
                 outfile.write(header)
                 current_size = 0
+            if self.max_pg_records and total_records >= self.max_pg_records:
+                print("Max records reached")
+                break
         outfile.close()
         proc.stdout.close()
         proc.wait()
 
         if proc.returncode != 0:
-            print("Error extracting table")
-            sys.exit(1)
+            print(f"Error extracting table {table}")
         print(datetime.now(), f" Wrote csv files")
         print(f"Done: total records written: {total_records:,} total bytes: {current_size:,}")
         return [file_suffix, total_records]
@@ -185,7 +214,7 @@ class PGWarehouse:
                 if inside_idxs:
                     m = re.search(r"PRIMARY KEY.*\((.*)\)", line)
                     if m:
-                        primary_key_cols = m.group(1).split(",")
+                        primary_key_cols = [col.strip().strip('"') for col in m.group(1).split(",")]
                         print("Primary cols: ", primary_key_cols)
 
         return {'columns': columns, 'primary_key_cols': primary_key_cols}
@@ -210,15 +239,11 @@ class PGWarehouse:
         self.backend.load_table(table, self.schema_file, drop_table=drop_table)
 
     def sync(self, table: str, table_opts: dict):
-        self.extract(table, table_opts)
-        self.load(table, table_opts)
+        self.backend.update_table(table, self.schema_file, upsert=False, allow_create=True)
 
     def resync(self, table: str, table_opts: dict):
         self.extract(table, table_opts)
         self.load(table, table_opts, drop_table=True)
-
-    def update(self, table: str, table_opts: dict):
-        self.backend.update_table(table, self.schema_file, upsert=False)
 
     # elif command == 'upsert_snowflake':
     #     verify_snow_env()
@@ -292,7 +317,10 @@ class ClickhouseBackend:
             return "Float64"
         if pgtype == 'year':
             return "String"
-        raise RuntimeError("Unknown postgres type: " + pgtype)
+        if pgtype == 'uuid':
+            return "String"
+        print(f"Warning, unknown postgres type: {pgtype} falling back to String")
+        return "String"
 
     def convert_pg_type_clickhouse(self, pgtype: str, for_parse=False):
         if pgtype.endswith("[]"):
@@ -336,7 +364,7 @@ class ClickhouseBackend:
 
         opts = self.parent.parse_schema_file(table, schema_file)
         if not opts['primary_key_cols']:
-            raise RuntimeError("Cannot create table with no primary key found")
+            print("Warning, no primary key found, will fallback to StripeLog table engine")
 
         import_structure = ", ".join(
             [f"{col} {self.convert_pg_type_clickhouse(ctype, for_parse=True)}" for col, ctype in opts['columns'].items()]
@@ -356,10 +384,17 @@ class ClickhouseBackend:
                 (col, f"Nullable({ctype})") if col not in opts['primary_key_cols'] else (col, ctype) for col, ctype in cols
             ]
             create_structure = ", ".join([f"{c[0]} {c[1]}" for c in cols])
-            order_cols = ', '.join(opts['primary_key_cols'])
-            self.client.execute(f"""
-                CREATE TABLE IF NOT EXISTS {table} ({create_structure}) ENGINE = MergeTree() ORDER BY ({order_cols});
-            """)
+            if opts['primary_key_cols']:
+                order_cols = ', '.join(opts['primary_key_cols'])
+                engine_clause = f"ENGINE = MergeTree() ORDER BY ({order_cols})"
+            else:
+                engine_clause = "ENGINE = StripeLog"
+            create_sql = f"""CREATE TABLE IF NOT EXISTS {table} ({create_structure}) {engine_clause};"""
+            try:
+                self.client.execute(create_sql)
+            except clickhouse_driver.errors.ServerException as e:
+                print(f"Error creating table {table}: \n{create_sql}\n{e}")
+                raise
 
         print("Sending to clickhouse...")
         
@@ -379,7 +414,18 @@ class ClickhouseBackend:
     def merge_table(self, table:str, schema_file:str):
         pass
 
-    def update_table(self, table: str, schema_file, upsert=False):
+    def table_exists(self, table: str):
+        rows = self.client.execute(f"SHOW TABLES LIKE '{table}'")
+        return len(rows) > 0
+    
+    def update_table(self, table: str, schema_file, upsert=False, allow_create=False):
+        if not self.table_exists(table):
+            if allow_create:
+                self.parent.extract(table, {})
+                return self.load_table(table, schema_file, create_table=True)
+            else:
+                raise RuntimeError(f"Table {table} does not exist in Clickhouse")
+            
         if not os.path.exists(schema_file):
             self.parent.dump_schema(table, schema_file)
 
@@ -469,7 +515,7 @@ class SnowflakeBackend:
         ch.setFormatter(logging.Formatter('%(asctime)s - %(funcName)s() - %(message)s'))
         logger.addHandler(ch)
 
-    def table_exists_snowflake(self, table: str):
+    def table_exists(self, table: str):
         self.snow_cursor.execute(f"select count(*) from information_schema.tables where table_name ilike '{table}'")
         return self.snow_cursor.fetchone()[0] >= 1
 
@@ -559,7 +605,12 @@ class SnowflakeBackend:
             print("Moving file to archive")
             shutil.move(nextfile, archive_dir)
 
-    def merge_table(self, table:str, schema_file:str):
+    def merge_table(self, table:str, schema_file:str, allow_create=False):
+        if not self.table_exists(table):
+            if allow_create:
+                return self.load_table(table, schema_file, create_table=True)
+            else:
+                raise RuntimeError(f"Table {table} does not exist in Snowflake")
         csv_dir = self.parent.csv_dir(table)
         if not os.path.exists(csv_dir):
             raise RuntimeError("Cannot find data dir: ", csv_dir)
