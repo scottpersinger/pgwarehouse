@@ -127,9 +127,9 @@ class SnowflakeBackend(Backend):
                 print(return_output(f"gzip -9 {nextfile}"))
                 nextfile += ".gz"
             csv = os.path.basename(nextfile)
-            self.snow_cursor.execute("USE SCHEMA public")
+            self.snow_cursor.execute(f"USE SCHEMA {self.snowsql_schema}")
             logger.debug("PUTing file")
-            self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.public.%{table};")
+            self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.{self.snowsql_schema}.%{table};")
             logger.info(f"COPY INTO INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table} PATTERN = '{csv}'")
             for row in self.snow_cursor.execute(f""" 
                 COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table}
@@ -167,14 +167,14 @@ class SnowflakeBackend(Backend):
                 print(return_output(f"gzip -9 {nextfile}"))
                 nextfile += ".gz"
             csv = os.path.basename(nextfile)
-            self.snow_cursor.execute("USE SCHEMA public")
+            self.snow_cursor.execute(f"USE SCHEMA {self.snowsql_schema}")
             logger.debug("PUTing file")
-            self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.public.%{table};")
+            self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.{self.snowsql_schema}.%{table};")
             logger.debug("LOADing file into database")
             update_sets = ", ".join([f'{table}.{self.quote_col(col)} = csvsrc.{self.quote_col(col)}' for col in columns])
             values_list = ", ".join([f'csvsrc.{self.quote_col(col)}' for col in columns])
             self.snow_cursor.execute(f"""
-                CREATE OR REPLACE FILE FORMAT pp_csv_format TYPE = 'csv' SKIP_HEADER = 1 
+                CREATE OR REPLACE FILE FORMAT pgw_csv_format TYPE = 'csv' SKIP_HEADER = 1 
                 FIELD_OPTIONALLY_ENCLOSED_BY = '0x22' ESCAPE_UNENCLOSED_FIELD = NONE
             """)
             logger.info(f"MERGE INTO INTO {self.snowsql_database}.{self.snowsql_schema}.{table} PATTERN = '{csv}'")
@@ -182,7 +182,7 @@ class SnowflakeBackend(Backend):
                 MERGE INTO {self.snowsql_database}.{self.snowsql_schema}.{table} USING 
                     (SELECT 
                     {column_list} 
-                    FROM @%{table}(FILE_FORMAT => 'pp_csv_format', PATTERN => '{csv}')
+                    FROM @%{table}(FILE_FORMAT => 'pgw_csv_format', PATTERN => '{csv}')
                     ) csvsrc
                     ON csvsrc.{key_col} = {table}.{key_col}
                     WHEN MATCHED THEN UPDATE SET {update_sets}

@@ -45,6 +45,9 @@ class PGWarehouse(PGBackend):
         os.makedirs(self.data_dir, exist_ok=True)
         self.config: dict = {}
         warehouse_config = {}
+        if command == 'init':
+            return self.init(config_file)
+        
         if config_file:
             self.config = yaml.safe_load(open(config_file))
             if 'warehouse' in self.config:
@@ -241,6 +244,38 @@ class PGWarehouse(PGBackend):
     ###############
     # Warehouse
     ###############
+
+    def init(self, config_file: str):
+        if os.path.exists(config_file):
+            print("Config file already exists")
+        else:
+            print("This will create a pgwarehouse config file in the current directory.")
+            backend = None
+            while backend not in ["1", "2"]:
+                backend = input("Choose your warehouse type (Snowflake - 1, Clickhouse - 2): ")
+            backend = ["snowflake", "clickhouse"][int(backend)-1]
+            conf = {
+                "postgres": {
+                    'pghost':"",
+                    'pgdatabase':"",
+                    'pguser':"",
+                    'pgpassword':"",
+                    'pgschema': 'public'
+                },
+                "warehouse": {
+                    "backend": backend
+                }
+            }
+            if backend == "snowflake":
+                for key in ['snowsql_account',  'snowsql_warehouse', 'snowsql_database', 'snowsql_user', 'snowsql_password']:
+                    conf['warehouse'][key] = ""
+            elif backend == "clickhouse":
+                for key in ['clickhouse_host', 'clickhouse_database', 'clickhouse_user', 'clickhouse_password']:
+                    conf['warehouse'][key] = ""
+            with open(config_file, "w") as f:
+                f.write(yaml.dump(conf))
+                f.write("# Add a 'tables' list to specify tables to sync\n")
+            print(f"Wrote config file {config_file}.\nPlease edit the file to set your Postgres and Warehouse connection details.")
 
     def iterate_csv_files(self, csv_dir):
         files = glob.glob(os.path.join(csv_dir, "*.gz"))

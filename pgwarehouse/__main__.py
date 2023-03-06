@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description='Postgres to Warehouse sync utility
 parser.add_argument(
     'command', 
     help="Command",
-    choices=['list','listwh','extract','load','sync','reload']
+    choices=['init','list','listwh','extract','load','sync','reload']
 )
 parser.add_argument('table', help="Table name or 'all' to use the config", nargs='?')
 parser.add_argument('--config', help="Config file", default='./pgwarehouse_conf.yaml', required=False)
