@@ -39,7 +39,7 @@ This will create a local `pgwarehouse_conf.yaml` file. Now you can edit your Pos
         pgdatabase: (defaults to $PGDATABASE
         pguser: (defaults to $PGUSER)
         pgpassword: (defaults to $PGPASSWORD)
-        pgschema: (default to 'public')
+        pgschema: (defaults to 'public')
 
 ## Specifying the warehouse credentials
 
@@ -91,7 +91,7 @@ Now use `sync` to sync a table (eg. the 'users' table):
 
     pgwarehouse sync users
 
-Data will be downloaded from the Postgres database into CSV files on the local machine, and then those files will be uploaded to the warehouse. Running `pgwarehouse listwh` should show the new table.
+Data will be downloaded from the Postgres database into CSV files on the local machine, and then those files will be uploaded to the warehouse. Running `pgwarehouse listwh` will show the new table.
 
 ## Updating a table
 
@@ -103,7 +103,7 @@ See [update strategies](#table-update-strategies) for different ways to update y
 
 ## Syncing multiple tables
 
-There are two ways to manage multiple tables. The first is just to use `all` as the table name:
+There are two ways to manage multiple tables. The first is just to pass `all` in place of the table name:
 
     pgwarehouse sync all
 
@@ -126,20 +126,22 @@ can remove this setting, drop any large tables, and then copy them in full (just
 
 ## Table update strategies
 
+#### New Records Only (default)
 The default update strategy is "new records only". This is done by selecting records with a greater value
 for their primary id column than the greatest value currently in the warehouse. This strategy is simple
 and quick, but only works for monotonically incrementing primary keys, and only finds new records.
 
+#### Reload each time
 Another supported strategy is "reload each time". This is the simplest strategy and we simply reload the
 entire table every time we sync. This strategy should be fine for small-ish tables (like <10m rows).
 
+#### Last Modified
 Finally, if your table has a `last modified` column then you can use the "all modifications strategy".
 In this case all records with a `last modified` timestamp greater than the maximum value found in the
 warehouse will be selected and "upserted" into the warehouse. Records that are already present
-(via matching the primary key) will be updated, and new records will be inserted. The Snowflake backend
-uses the [MERGE](https://docs.snowflake.com/en/sql-reference/sql/merge) operation. The Clickhouse
-backend uses `ALTER TABLE .. DELETE` to remove matching records and then `INSERT` to insert the new
-values.
+(via matching the primary key) will be updated, and new records will be inserted.
+    * The Snowflake backend uses the [MERGE](https://docs.snowflake.com/en/sql-reference/sql/merge) operation. 
+    * The Clickhouse backend uses `ALTER TABLE .. DELETE` to remove matching records and then `INSERT` to insert the new values.
 
 ### What about deletes?
 
@@ -191,7 +193,7 @@ The `reload` argument can take 3 forms:
 `cron`, [Heroku Scheduler](https://devcenter.heroku.com/articles/scheduler), or a K8s
 [CronJob](https://kubernetes.io/docs/tasks/job/automated-tasks-with-cron-jobs/).
 
-When running the tool will need access to local storage - potentially a lot if you are synchronizing
+When running, the tool will need access to local storage - potentially a lot if you are synchronizing
 big tables. But nothing needs to persist between sync runs (except the config file) - the tool 
 only relies on state it can query from Postgres or the warehouse.
 
