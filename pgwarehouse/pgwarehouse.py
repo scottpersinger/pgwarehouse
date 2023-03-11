@@ -28,7 +28,7 @@ logger.addHandler(handler)
 
 class PGWarehouse(PGBackend):
     def __init__(self, config_file: str = "", command: str = "", table: str="", data_dir: str=".",
-                backend: str= "", debug=False) -> None:
+                backend_type: str= "", last_modified: str=None, debug=False) -> None:
 
         self.backend_type: str
         self.backend: Backend
@@ -51,8 +51,10 @@ class PGWarehouse(PGBackend):
         if config_file:
             self.config = yaml.safe_load(open(config_file))
             if 'warehouse' in self.config:
-                self.backend_type: str = self.config['warehouse'].get('backend', backend)
+                self.backend_type: str = self.config['warehouse'].get('backend', backend_type)
                 warehouse_config = self.config['warehouse']
+        else:
+            self.backend_type = backend_type
         if not self.backend_type:
             raise RuntimeError("Must specify the warehouse backend")
         self.setup_pg_env()
@@ -64,13 +66,13 @@ class PGWarehouse(PGBackend):
         else:
             raise RuntimeError(f"Unknown backend: {self.backend_type}")
 
-        def get_table_opts(tablename):
+        def get_table_opts(tablename, last_modified=None):
             for t in self.config.get('tables', []):
                 if t == tablename:
                     return {}
                 elif isinstance(t, dict) and tablename in t:
                     return t[tablename]
-            return {}
+            return {'last_modified':last_modified} if last_modified else {}
 
         def get_all_tables():
             if 'tables' in self.config:
@@ -94,7 +96,10 @@ class PGWarehouse(PGBackend):
                 logger.info("<<<<<<<<<\n")
             print("============== DONE =========== ")
         elif table:
-            table_opts = get_table_opts(table)
+            if not self.table_exists(table):
+                print(f"Error, table {table} not found in Postgres")
+                return
+            table_opts = get_table_opts(table, last_modified=last_modified)
             self.table = table
             self.schema_file = os.path.join(self.data_dir, table + ".schema")
             logger.info(f"=== {command} {table}")
@@ -104,6 +109,76 @@ class PGWarehouse(PGBackend):
             getattr(self, command)()
         else:
             print("Bad arguments")
+
+    ###############
+    # Commands
+    ###############
+
+    def init(self, config_file: str):
+        if os.path.exists(config_file):
+            print("Config file already exists")
+        else:
+            print("This will create a pgwarehouse config file in the current directory.")
+            backend = None
+            while backend not in ["1", "2"]:
+                backend = input("Choose your warehouse type (Snowflake - 1, Clickhouse - 2): ")
+            backend = ["snowflake", "clickhouse"][int(backend)-1]
+            conf = {
+                "postgres": {
+                    'pghost':"",
+                    'pgdatabase':"",
+                    'pguser':"",
+                    'pgpassword':"",
+                    'pgschema': 'public'
+                },
+                "warehouse": {
+                    "backend": backend
+                }
+            }
+            if backend == "snowflake":
+                for key in ['snowsql_account',  'snowsql_warehouse', 'snowsql_database', 'snowsql_user', 'snowsql_password']:
+                    conf['warehouse'][key] = ""
+            elif backend == "clickhouse":
+                for key in ['clickhouse_host', 'clickhouse_database', 'clickhouse_user', 'clickhouse_password']:
+                    conf['warehouse'][key] = ""
+            with open(config_file, "w") as f:
+                f.write(yaml.dump(conf))
+                f.write("# Add a 'tables' list to specify tables to sync\n")
+            print(f"Wrote config file {config_file}.\nPlease edit the file to set your Postgres and Warehouse connection details.")
+
+    def iterate_csv_files(self, csv_dir):
+        files = glob.glob(os.path.join(csv_dir, "*.gz"))
+        for idx, file in enumerate(sorted(files, key=lambda x: int(re.findall(r"\d+", "0,"+x)[-1]))):
+            yield idx, file
+
+    def csv_dir(self, table: str):
+        return os.path.join(self.data_dir, table + "_data")
+
+    def get_log_handler(self) -> logging.Handler:
+        return handler
+    
+    def listwh(self):
+        self.backend.list_tables()
+
+    def load(self, table: str, table_opts: dict, drop_table=False):
+        # balk if table exists
+        self.backend.load_table(table, self.schema_file, drop_table=drop_table)
+
+    def sync(self, table: str, table_opts: dict):
+        if table_opts.get('reload') == True:
+            return self.reload(table, table_opts)
+        
+        self.backend.update_table(
+            table, 
+            self.schema_file, 
+            upsert='last_modified' in table_opts, 
+            allow_create=True,
+            last_modified=table_opts.get('last_modified'))
+
+    def reload(self, table: str, table_opts: dict):
+        logger.debug(f"RELOADING table {table}")
+        self.extract(table, table_opts)
+        self.load(table, table_opts, drop_table=True)
 
     ###############
     # Postgres
@@ -118,9 +193,10 @@ class PGWarehouse(PGBackend):
             setattr(self, key, val)
             os.environ[key.upper()] = val
         self.pgschema = conf.get('pgschema', os.environ.get('PGSCHEMA', 'public'))
+        self.pgport = int(conf.get('pgport', os.environ.get('PGPORT', '5432')))
         self.max_pg_records = conf.get('max_records', None)
         self.client = psycopg2.connect(
-            f"host={self.pghost} dbname={self.pgdatabase} user={self.pguser} password={self.pgpassword}",
+            f"host={self.pghost} dbname={self.pgdatabase} user={self.pguser} password={self.pgpassword} port={self.pgport}",
             connect_timeout=10
         )
         self.cursor: psycopg2.extensions.cursor = self.client.cursor()
@@ -145,6 +221,9 @@ class PGWarehouse(PGBackend):
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=['schema', 'table', 'size', 'rows']))
+
+    def count_warehouse_table(self, table):
+        return self.backend.count_table(table)
 
     def all_table_names(self):
         self.cursor.execute(
@@ -241,68 +320,8 @@ class PGWarehouse(PGBackend):
 
         return {'columns': columns, 'primary_key_cols': primary_key_cols}
 
-    ###############
-    # Warehouse
-    ###############
-
-    def init(self, config_file: str):
-        if os.path.exists(config_file):
-            print("Config file already exists")
-        else:
-            print("This will create a pgwarehouse config file in the current directory.")
-            backend = None
-            while backend not in ["1", "2"]:
-                backend = input("Choose your warehouse type (Snowflake - 1, Clickhouse - 2): ")
-            backend = ["snowflake", "clickhouse"][int(backend)-1]
-            conf = {
-                "postgres": {
-                    'pghost':"",
-                    'pgdatabase':"",
-                    'pguser':"",
-                    'pgpassword':"",
-                    'pgschema': 'public'
-                },
-                "warehouse": {
-                    "backend": backend
-                }
-            }
-            if backend == "snowflake":
-                for key in ['snowsql_account',  'snowsql_warehouse', 'snowsql_database', 'snowsql_user', 'snowsql_password']:
-                    conf['warehouse'][key] = ""
-            elif backend == "clickhouse":
-                for key in ['clickhouse_host', 'clickhouse_database', 'clickhouse_user', 'clickhouse_password']:
-                    conf['warehouse'][key] = ""
-            with open(config_file, "w") as f:
-                f.write(yaml.dump(conf))
-                f.write("# Add a 'tables' list to specify tables to sync\n")
-            print(f"Wrote config file {config_file}.\nPlease edit the file to set your Postgres and Warehouse connection details.")
-
-    def iterate_csv_files(self, csv_dir):
-        files = glob.glob(os.path.join(csv_dir, "*.gz"))
-        for idx, file in enumerate(sorted(files, key=lambda x: int(re.findall(r"\d+", "0,"+x)[-1]))):
-            yield idx, file
-
-    def csv_dir(self, table: str):
-        return os.path.join(self.data_dir, table + "_data")
-
-    def get_log_handler(self) -> logging.Handler:
-        return handler
+    def table_exists(self, table: str):
+        sql = f"select 1 from information_schema.tables where table_schema='{self.pgschema}' and table_name='{table}'"
+        self.cursor.execute(sql)
+        return self.cursor.fetchone() is not None
     
-    def listwh(self):
-        self.backend.list_tables()
-
-    def load(self, table: str, table_opts: dict, drop_table=False):
-        # balk if table exists
-        self.backend.load_table(table, self.schema_file, drop_table=drop_table)
-
-    def sync(self, table: str, table_opts: dict):
-        self.backend.update_table(
-            table, 
-            self.schema_file, 
-            upsert='last_modified' in table_opts, 
-            allow_create=True,
-            last_modified=table_opts.get('last_modified'))
-
-    def reload(self, table: str, table_opts: dict):
-        self.extract(table, table_opts)
-        self.load(table, table_opts, drop_table=True)

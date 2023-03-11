@@ -172,6 +172,8 @@ specify the table as a nested dictionary with options:
         - shoppers
             last_modified: update_time
             reload: sun
+        - original_orders:
+            skip: true
 
 In this example:
 
@@ -180,6 +182,7 @@ In this example:
 * `orders` will have modified records (found by the 'updated_at' column) applied on each sync
 * `shoppers` will have modified records applied on each sync, except for any sync
 which happens on Sunday, in which case the entire table will be reloaded.
+* `original_orders` will be skipped entirely
 
 The `reload` argument can take 3 forms:
 

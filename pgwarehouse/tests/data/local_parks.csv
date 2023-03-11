@@ -1,0 +1,4 @@
+park_name,park_type,park_size,park_location_lat,park_location_lon
+Central Park,urban,2000,100.0,200.1
+Golden Gate Park,urban,1500,-50.2,-34.2
+Point Isabel,dog,10,25.5,65.5

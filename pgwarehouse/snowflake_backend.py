@@ -56,6 +56,12 @@ class SnowflakeBackend(Backend):
         self.snow_cursor.execute(f"select count(*) from information_schema.tables where table_name ilike '{table}'")
         return self.snow_cursor.fetchone()[0] >= 1
 
+    def count_table(self, table: str) -> int:
+        return self.snow_cursor.execute("select count(*) from {self.snowsql_schema}.{table}").fetchone()[0]
+
+    def _drop_table(self, table: str):
+        return self.snow_cursor.execute("DROP TABLE IF EXISTS {self.snowsql_schema}.{table}")
+
     def pg_to_sf_root_type(self, pgtype: str):
         if pgtype.endswith("_enum"):
             return "STRING"
@@ -252,6 +258,5 @@ class SnowflakeBackend(Backend):
             self.merge_table(table, schema_file)
         else:
             self.load_table(table, schema_file, create_table=False)
-
 
 

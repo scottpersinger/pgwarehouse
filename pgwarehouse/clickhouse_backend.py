@@ -87,7 +87,6 @@ class ClickhouseBackend(Backend):
         user = self.clickhouse_user
         password = self.clickhouse_password
         database = self.clickhouse_database
-
         if echo:
             echo = "--echo"
         else:
@@ -108,8 +107,13 @@ class ClickhouseBackend(Backend):
             raise RuntimeError(f"Command failed {ret}: {sql}")
         return ret.stdout.decode('utf-8').strip()
 
-    def load_table(self, table, schema_file, create_table=True, drop_table=False):
-        csv_dir = self.parent.csv_dir(table)
+    def count_table(self, table: str) -> int:
+        rows = self.client.execute(f"SELECT count(*) FROM {table}")[0][0]
+        return rows
+
+    def load_table(self, table, schema_file, create_table=True, drop_table=False, csv_dir: str=None):
+        if csv_dir is None:
+            csv_dir = self.parent.csv_dir(table)
         if not os.path.exists(csv_dir):
             raise RuntimeError("Cannot find data dir: ", csv_dir)
 
@@ -165,6 +169,16 @@ class ClickhouseBackend(Backend):
         rows = self.client.execute(f"SHOW TABLES LIKE '{table}'")
         return len(rows) > 0
     
+    def _drop_table(self, table: str):
+        return self.client.execute(f"DROP TABLE IF EXISTS {table}")
+
+    def _query_table(self, table: str, cols: list[str], where: str, limit: int=None):
+        colc = ", ".join(cols)
+        wherec = f"WHERE {where}" if where is not None else ""
+        limitc = f"LIMIT {limit}" if limit else ""
+        sql = f"select {colc} from {table} {wherec} {limitc}"
+        return self.client.execute(sql)
+
     def update_table(self, table: str, schema_file: str, upsert=False, last_modified: str = None, allow_create=False):
         if not self.table_exists(table):
             if allow_create:
@@ -222,5 +236,33 @@ class ClickhouseBackend(Backend):
             self.load_table(table, schema_file, create_table=False)
 
     def merge_table(self, table:str, schema_file:str):
-        raise NotImplementedError("Merge table not implemented for Clickhouse")
+        # New+updated records have been downloaded to CSV already.
+        # Clickhouse doesn't support Upsert, so instead we load the new 
+        # records into a temp table, then we join the target table to the temp table
+        # and delete existing records. Finally we Insert all the new records into the
+        # target table and remove the temp table.
+
+        opts = self.parent.parse_schema_file(table, schema_file)
+        if not opts['primary_key_cols']:
+            raise RuntimeError("No primary key for the table found, have to reload")
+
+        temp_table = table + "__changes"
+        csv_dir = self.parent.csv_dir(table)
+
+        self.load_table(temp_table, schema_file, create_table=True, drop_table=True, csv_dir=csv_dir)
+        primary_key = opts['primary_key_cols'][0]
+
+        logger.debug(f"Deleting dupe records between {temp_table} and {table}")
+        self.clickclient(f"""
+            ALTER TABLE {table} DELETE WHERE {primary_key} IN (SELECT {primary_key} from {temp_table});
+        """)
+        logger.debug(f"Inserting new records into {table}")
+        self.clickclient(f"""
+            INSERT INTO {table} SELECT * FROM {temp_table};
+        """)
+        self.client.execute(f"DROP TABLE {temp_table}")
+
+
+
+
 
