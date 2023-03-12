@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pgwarehouse"
 version = "0.1.0"
-description = "Postgres to data warehouse sync tool."
+description = "Esaily sync your Postgres database to your data warehouse."
 authors = ["Scott Persinger <scottpersinger@gmail.com>"]
 readme = "README.md"
 
@@ -20,3 +20,7 @@ pytest = "^7.2.2"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.poetry.scripts]
+pgwarehouse = 'pgwarehouse.__main__:main'
