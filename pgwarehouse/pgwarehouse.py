@@ -48,7 +48,7 @@ class PGWarehouse(PGBackend):
         if command == 'init':
             return self.init(config_file)
         
-        if config_file:
+        if config_file and os.path.exists(config_file):
             self.config = yaml.safe_load(open(config_file))
             if 'warehouse' in self.config:
                 self.backend_type: str = self.config['warehouse'].get('backend', backend_type)
@@ -56,7 +56,7 @@ class PGWarehouse(PGBackend):
         else:
             self.backend_type = backend_type
         if not self.backend_type:
-            raise RuntimeError("Must specify the warehouse backend")
+            raise RuntimeError("Must specify the warehouse backend in the config file or with the --backend arg")
         self.setup_pg_env()
 
         if self.backend_type == 'clickhouse':
@@ -189,7 +189,7 @@ class PGWarehouse(PGBackend):
         for key in ['pghost','pgdatabase','pguser','pgpassword']:
             val = conf.get(key, os.environ.get(key.upper()))
             if val is None:
-                raise RuntimeError(f"Missing {key} in config file or environment")
+                raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
             setattr(self, key, val)
             os.environ[key.upper()] = val
         self.pgschema = conf.get('pgschema', os.environ.get('PGSCHEMA', 'public'))

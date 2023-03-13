@@ -140,8 +140,9 @@ Finally, if your table has a `last modified` column then you can use the "all mo
 In this case all records with a `last modified` timestamp greater than the maximum value found in the
 warehouse will be selected and "upserted" into the warehouse. Records that are already present
 (via matching the primary key) will be updated, and new records will be inserted.
-    * The Snowflake backend uses the [MERGE](https://docs.snowflake.com/en/sql-reference/sql/merge) operation. 
-    * The Clickhouse backend uses `ALTER TABLE .. DELETE` to remove matching records and then `INSERT` to insert the new values.
+
+* The Snowflake backend uses the [MERGE](https://docs.snowflake.com/en/sql-reference/sql/merge) operation. 
+* The Clickhouse backend uses `ALTER TABLE .. DELETE` to remove matching records and then `INSERT` to insert the new values.
 
 ### What about deletes?
 

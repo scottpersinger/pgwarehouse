@@ -35,7 +35,7 @@ class SnowflakeBackend(Backend):
         for key in ['snowsql_account', 'snowsql_database', 'snowsql_schema','snowsql_warehouse','snowsql_user','snowsql_pwd']:
             val = self.config.get(key, os.environ.get(key.upper()))
             if val is None:
-                raise RuntimeError(f"Missing {key} in config file or environment")
+                raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
             setattr(self, key, val)
 
         # Gets the version
@@ -61,6 +61,13 @@ class SnowflakeBackend(Backend):
 
     def _drop_table(self, table: str):
         return self.snow_cursor.execute("DROP TABLE IF EXISTS {self.snowsql_schema}.{table}")
+
+    def _query_table(self, table: str, cols: list[str], where: str, limit: int=None):
+        colc = ", ".join(cols)
+        wherec = f"WHERE {where}" if where is not None else ""
+        limitc = f"LIMIT {limit}" if limit else ""
+        sql = f"select {colc} from {self.snowsql_schema}.{table} {wherec} {limitc}"
+        return self.snow_cursor.execute(sql)
 
     def pg_to_sf_root_type(self, pgtype: str):
         if pgtype.endswith("_enum"):

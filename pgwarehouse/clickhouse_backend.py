@@ -28,7 +28,7 @@ class ClickhouseBackend(Backend):
         for key in ['clickhouse_host', 'clickhouse_user', 'clickhouse_password']:
             val = self.config.get(key, os.environ.get(key.upper()))
             if val is None:
-                raise RuntimeError(f"Missing {key} in config file or environment")
+                raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
             setattr(self, key, val)
         self.clickhouse_database = self.config.get('clickhouse_database', os.environ.get('CLICKHOUSE_DATABASE', 'default'))
         if shutil.which("clickhouse-client") is None:
@@ -111,6 +111,9 @@ class ClickhouseBackend(Backend):
         rows = self.client.execute(f"SELECT count(*) FROM {table}")[0][0]
         return rows
 
+    def _quote_column(self, col_name):
+        return col_name.replace(" ","_")
+        
     def load_table(self, table, schema_file, create_table=True, drop_table=False, csv_dir: str=None):
         if csv_dir is None:
             csv_dir = self.parent.csv_dir(table)
@@ -122,10 +125,10 @@ class ClickhouseBackend(Backend):
             print("Warning, no primary key found, will fallback to StripeLog table engine")
 
         import_structure = ", ".join(
-            [f"{col} {self.convert_pg_type_clickhouse(ctype, for_parse=True)}" for col, ctype in opts['columns'].items()]
+            [f"{self._quote_column(col)} {self.convert_pg_type_clickhouse(ctype, for_parse=True)}" for col, ctype in opts['columns'].items()]
         )
         select_cols = [
-            f"parseDateTimeBestEffortOrNull({col})" if (ctype.startswith("date") or ctype.startswith("time")) else f"{col}" 
+            f"parseDateTimeBestEffortOrNull({self._quote_column(col)})" if (ctype.startswith("date") or ctype.startswith("time")) else f"{self._quote_column(col)}" 
             for col, ctype in opts['columns'].items()
         ]
         select_clause = ", ".join(select_cols)
@@ -138,7 +141,7 @@ class ClickhouseBackend(Backend):
             cols = [
                 (col, f"Nullable({ctype})") if col not in opts['primary_key_cols'] else (col, ctype) for col, ctype in cols
             ]
-            create_structure = ", ".join([f"{c[0]} {c[1]}" for c in cols])
+            create_structure = ", ".join([f"{self._quote_column(c[0])} {c[1]}" for c in cols])
             if opts['primary_key_cols']:
                 order_cols = ', '.join(opts['primary_key_cols'])
                 engine_clause = f"ENGINE = MergeTree() ORDER BY ({order_cols})"
