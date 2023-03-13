@@ -24,5 +24,6 @@ CREATE TABLE local_parks (
     park_type PARK_TYPE,
     park_size integer,
     park_location_lat float,
-    park_location_lon float
+    park_location_lon float,
+    "park state" VARCHAR
 );
