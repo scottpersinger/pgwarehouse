@@ -59,6 +59,9 @@ or
     SNOWSQL_USER
     SNOWSQL_PWD
 
+(The Snowflake parameters are the same as those for the [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql-start)
+CLI tool. The `SNOWSQL_ACCOUNT` value should be your "account identifier".)
+
 or set these values in the `warehouse` stanza in the config file:
 
     warehouse:
@@ -74,8 +77,6 @@ or set these values in the `warehouse` stanza in the config file:
         snowsql_warehouse:
         snowsql_user:
         snowsql_pwd:
-
-The `snowsql_account` value should indicate your Snowflake account id. It's usually two parts separated by a '-'.
 
 # Usage
 
