@@ -4,7 +4,7 @@
 
 Postgres is an amazing, general purpose OLTP database. But it's not designed for heavy analytic (OLAP) usage. Analytic queries are much better served by a columnar store database like Snowflake or Clickhouse.
 
-This package allows you to easily sync data from a Postgres database into a local or cloud data warehouse (currently Snowflake or Clickhouse). You can perform a one-time sync operation, or run periodic incremental syncs to keep your warehouse up to date.
+This package allows you to easily sync data from a Postgres database into a local or cloud data warehouse (currently [Snowflake](https://docs.snowflake.com/), [ClickHouse](https://clickhouse-docs.vercel.app/docs/en/intro), or [DuckDB](https://duckdb.org/docs/)). You can perform a one-time sync operation, or run periodic incremental syncs to keep your warehouse up to date.
 
 ## Features
 
@@ -59,6 +59,10 @@ or
     SNOWSQL_USER
     SNOWSQL_PWD
 
+or
+
+    DUCKDB_PATH (path to the duckdb database file)
+
 (The Snowflake parameters are the same as those for the [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql-start)
 CLI tool. The `SNOWSQL_ACCOUNT` value should be your "account identifier".)
 
@@ -77,6 +81,8 @@ or set these values in the `warehouse` stanza in the config file:
         snowsql_warehouse:
         snowsql_user:
         snowsql_pwd:
+        --or--
+        duckdb_path:
 
 # Usage
 
