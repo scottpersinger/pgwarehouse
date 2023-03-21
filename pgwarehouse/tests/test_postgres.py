@@ -8,6 +8,9 @@ import psycopg2
 
 from pgwarehouse.pgwarehouse import PGWarehouse
 
+#BACKEND = 'clickhouse'
+BACKEND = 'duckdb'
+
 def dbsetup(postgresql):
     conn = psycopg2.connect(**postgresql.dsn())
     with conn.cursor() as cursor:
@@ -83,14 +86,14 @@ def line_count(path) -> int:
 
 def test_list(connection, out_dir, ch_env):
     pgw = PGWarehouse(command='list', table=None,
-            data_dir=out_dir, backend_type='clickhouse', debug=True)
+            data_dir=out_dir, backend_type=BACKEND, debug=True)
     pgw = PGWarehouse(command='listwh', table=None,
-            data_dir=out_dir, backend_type='clickhouse', debug=True)
+            data_dir=out_dir, backend_type=BACKEND, debug=True)
     
 def test_extract(connection, out_dir, ch_env):
     for table in ['local_parks','my_orders']:
         pgw = PGWarehouse(command='extract', table=table,
-                    data_dir=out_dir, backend_type='clickhouse', debug=True)
+                    data_dir=out_dir, backend_type=BACKEND, debug=True)
         assert os.path.exists(os.path.join(out_dir, table + "_data"))
         assert len(glob.glob(os.path.join(out_dir, table+"_data", "*"))) > 0
 
@@ -98,41 +101,41 @@ def test_extract_load(connection, out_dir, ch_env):
     for table in ['local_parks','users10','my_orders']:
         path = os.path.join(os.path.dirname(__file__), 'data', table+".csv")
         pgw = PGWarehouse(command='extract', table=table,
-                    data_dir=out_dir, backend_type='clickhouse', debug=True)
+                    data_dir=out_dir, backend_type=BACKEND, debug=True)
         pgw.backend._drop_table(table)
         pgw = PGWarehouse(command='load', table=table,
-                    data_dir=out_dir, backend_type='clickhouse', debug=True)
+                    data_dir=out_dir, backend_type=BACKEND, debug=True)
         assert pgw.count_warehouse_table(table) == table_size(connection, table)
 
 def test_reload(connection, out_dir):
     table = 'users10'
     pgw = PGWarehouse(command='extract', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     pgw.backend._drop_table(table)
     pgw = PGWarehouse(command='load', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     pgw = PGWarehouse(command='reload', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     assert pgw.count_warehouse_table(table) == table_size(connection, table)
 
 def test_basic_sync(connection, out_dir):
     pgw = PGWarehouse(command='list',
-                data_dir=out_dir, backend_type='clickhouse')
+                data_dir=out_dir, backend_type=BACKEND)
     
     for table in ['local_parks','users10','my_orders']:
         pgw.backend._drop_table(table)
         pgw = PGWarehouse(command='sync', table=table,
-                    data_dir=out_dir, backend_type='clickhouse', debug=True)
+                    data_dir=out_dir, backend_type=BACKEND, debug=True)
         assert pgw.count_warehouse_table(table) == table_size(connection, table)
 
 def test_incremental_sync(connection, out_dir):
     pgw = PGWarehouse(command='list',
-                data_dir=out_dir, backend_type='clickhouse')
+                data_dir=out_dir, backend_type=BACKEND)
     
     table = 'users10'
     pgw.backend._drop_table(table)
     pgw = PGWarehouse(command='sync', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     orig_size = table_size(connection, table)
     assert pgw.count_warehouse_table(table) == orig_size
 
@@ -145,18 +148,18 @@ def test_incremental_sync(connection, out_dir):
 
     # Resync
     pgw = PGWarehouse(command='sync', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     assert pgw.count_warehouse_table(table) == (orig_size+2)
 
 
 def test_last_modified_sync(connection, out_dir):
     pgw = PGWarehouse(command='list',
-                data_dir=out_dir, backend_type='clickhouse')
+                data_dir=out_dir, backend_type=BACKEND)
     
     table = 'my_orders'
     pgw.backend._drop_table(table)
     pgw = PGWarehouse(command='sync', table=table,
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     orig_size = table_size(connection, table)
     assert pgw.count_warehouse_table(table) == orig_size
 
@@ -172,7 +175,7 @@ def test_last_modified_sync(connection, out_dir):
 
     # Resync
     pgw = PGWarehouse(command='sync', table=table, last_modified='order_updated',
-                data_dir=out_dir, backend_type='clickhouse', debug=True)
+                data_dir=out_dir, backend_type=BACKEND, debug=True)
     assert pgw.count_warehouse_table(table) == (orig_size+1)
 
     rows = pgw.backend._query_table(table, ['id','order_amount'], "id in (18,19)")
