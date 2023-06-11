@@ -25,3 +25,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 pgwarehouse = 'pgwarehouse.__main__:main'
+pgwh = 'pgwarehouse.__main__:main'
