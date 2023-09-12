@@ -143,7 +143,7 @@ class SnowflakeBackend(Backend):
             self.snow_cursor.execute(f"USE SCHEMA {self.snowsql_schema}")
             logger.debug("PUTing file")
             self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.{self.snowsql_schema}.%{table};")
-            logger.info(f"COPY INTO INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table} PATTERN = '{csv}'")
+            logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table} PATTERN = '{csv}'")
             for row in self.snow_cursor.execute(f""" 
                 COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table}
                     FILE_FORMAT = (type = csv field_optionally_enclosed_by='\\"' SKIP_HEADER={skip}) ON_ERROR=CONTINUE FORCE=TRUE 
@@ -190,7 +190,7 @@ class SnowflakeBackend(Backend):
                 CREATE OR REPLACE FILE FORMAT pgw_csv_format TYPE = 'csv' SKIP_HEADER = 1 
                 FIELD_OPTIONALLY_ENCLOSED_BY = '0x22' ESCAPE_UNENCLOSED_FIELD = NONE
             """)
-            logger.info(f"MERGE INTO INTO {self.snowsql_database}.{self.snowsql_schema}.{table} PATTERN = '{csv}'")
+            logger.info(f"MERGE INTO {self.snowsql_database}.{self.snowsql_schema}.{table} PATTERN = '{csv}'")
             self.snow_cursor.execute(f""" 
                 MERGE INTO {self.snowsql_database}.{self.snowsql_schema}.{table} USING 
                     (SELECT 
