@@ -49,6 +49,7 @@ Again you can use the environment or the config file. Set these sets of vars in 
     CLICKHOUSE_DATABASE
     CLICKHOUSE_USER
     CLICKHOUSE_PWD
+    CLICKHOUSE_SECURE
 
 or
 
@@ -74,6 +75,7 @@ or set these values in the `warehouse` stanza in the config file:
         clickhouse_database: 
         clickhouse_user:
         clickhouse_password:
+        clickhouse_secure:
         --or--
         snowsql_account:
         snowsql_database:
@@ -85,6 +87,11 @@ or set these values in the `warehouse` stanza in the config file:
         duckdb_path:
 
 # Usage
+
+General way for run:
+```
+source .env.local; pgwarehouse --config .local.yaml sync users
+```
 
 Once the credentials are configured you can start syncing data. Start by listing tables from the Postgres database:
 
@@ -220,6 +227,16 @@ When the `extract` process runs, its stores data in `./pgw_data/<table name>_dat
 files are uploaded they are moved into an `archive` subdirectory. When the **next sync**
 runs then this archive directory will be cleaned up. This allows you to go examine
 the CSV downloaded data in case the upload fails for some reason. 
+
+## Development
+
+Requirements:
+```bash
+sudo apt install libpq-dev postgresql postgresql-contrib
+```
+
+Run tests:
+```poetry run python -m pytest```
 
 ## Limitations
 

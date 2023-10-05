@@ -31,13 +31,16 @@ class ClickhouseBackend(Backend):
                 raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
             setattr(self, key, val)
         self.clickhouse_database = self.config.get('clickhouse_database', os.environ.get('CLICKHOUSE_DATABASE', 'default'))
+        self.clickhouse_secure = bool(self.config.get('clickhouse_secure', int(os.environ.get('CLICKHOUSE_SECURE', 0))))
+
         if shutil.which("clickhouse-client") is None:
             raise RuntimeError("clickhouse-client not found in PATH")
         self.client: ClickhouseClient = ClickhouseClient(
             host=self.clickhouse_host,
             user=self.clickhouse_user,
             password=self.clickhouse_password,
-            database=self.clickhouse_database
+            database=self.clickhouse_database,
+            secure=self.clickhouse_secure
         )
 
     def list_tables(self):
@@ -87,18 +90,19 @@ class ClickhouseBackend(Backend):
         user = self.clickhouse_user
         password = self.clickhouse_password
         database = self.clickhouse_database
+        secure = '--secure' if self.clickhouse_secure else ''
         if echo:
             echo = "--echo"
         else:
             echo = ""
 
         if input_file:
-            cat = "gzcat" if input_file.endswith(".gz") else "cat"
+            cat = "zcat" if input_file.endswith(".gz") else "cat"
             logger.debug(f"{cat} {input_file} | clickhouse-client --query {sql}")
-            ret = subprocess.run(f'{cat} {input_file} | clickhouse-client -h {host} -d {database} -u {user} --password "{password}" --query "{sql}"', 
+            ret = subprocess.run(f'{cat} {input_file} | clickhouse-client -h {host} {secure} -d {database} -u {user} --password "{password}" --query "{sql}"', 
                                     shell=True, capture_output=True)            
         else:
-            cmd = f'clickhouse-client {echo} -h {host} -d {database} -u {user} --password "{password}" --query "{sql}"'
+            cmd = f'clickhouse-client {echo} -h {host} {secure} -d {database} -u {user} --password "{password}" --query "{sql}"'
             logger.debug(f"clickhouse-client --query {sql}")
             ret = subprocess.run(cmd, 
                                 shell=True, capture_output=True)
@@ -242,14 +246,14 @@ class ClickhouseBackend(Backend):
         # New+updated records have been downloaded to CSV already.
         # Clickhouse doesn't support Upsert, so instead we load the new 
         # records into a temp table, then we join the target table to the temp table
-        # and delete existing records. Finally we Insert all the new records into the
+        # and delete existing records. Finally, we Insert all the new records into the
         # target table and remove the temp table.
 
         opts = self.parent.parse_schema_file(table, schema_file)
         if not opts['primary_key_cols']:
             raise RuntimeError("No primary key for the table found, have to reload")
 
-        temp_table = table + "__changes"
+        temp_table = f"{table}__changes"
         csv_dir = self.parent.csv_dir(table)
 
         self.load_table(temp_table, schema_file, create_table=True, drop_table=True, csv_dir=csv_dir)

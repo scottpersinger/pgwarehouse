@@ -5,3 +5,7 @@ __pycache__
 .env
 dist
 pgwarehouse/tests/output/
+.idea/
+duck.db
+pgwarehouse/tests/duck.db
+secure_data/

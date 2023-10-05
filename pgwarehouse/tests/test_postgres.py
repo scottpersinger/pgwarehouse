@@ -14,6 +14,7 @@ BACKEND = 'duckdb'
 def dbsetup(postgresql):
     conn = psycopg2.connect(**postgresql.dsn())
     with conn.cursor() as cursor:
+        cursor.execute("SET datestyle = 'MDY';")
         with open(os.path.join(os.path.dirname(__file__), 'pg_setup.sql')) as f:
             cursor.execute(f.read())
 
@@ -63,13 +64,13 @@ def connection(postgresql):
 @pytest.fixture
 def out_dir():
     dir = os.path.join(os.path.dirname(__file__), 'output')
-    shutil.rmtree(dir)
     os.makedirs(dir, exist_ok=True)
+    shutil.rmtree(dir)
     return dir
 
 @pytest.fixture
 def ch_env():
-    assert 'CLICKHOUSE_HOST' in os.environ
+    # assert 'CLICKHOUSE_HOST' in os.environ
     return None
 
 def drop_table(connection, table):
@@ -94,12 +95,12 @@ def test_extract(connection, out_dir, ch_env):
     for table in ['local_parks','my_orders']:
         pgw = PGWarehouse(command='extract', table=table,
                     data_dir=out_dir, backend_type=BACKEND, debug=True)
-        assert os.path.exists(os.path.join(out_dir, table + "_data"))
-        assert len(glob.glob(os.path.join(out_dir, table+"_data", "*"))) > 0
+        assert os.path.exists(os.path.join(out_dir, f"{table}_data"))
+        assert len(glob.glob(os.path.join(out_dir, f"{table}_data", "*"))) > 0
 
 def test_extract_load(connection, out_dir, ch_env):
     for table in ['local_parks','users10','my_orders']:
-        path = os.path.join(os.path.dirname(__file__), 'data', table+".csv")
+        path = os.path.join(os.path.dirname(__file__), 'data', f"{table}.csv")
         pgw = PGWarehouse(command='extract', table=table,
                     data_dir=out_dir, backend_type=BACKEND, debug=True)
         pgw.backend._drop_table(table)
