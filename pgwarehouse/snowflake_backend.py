@@ -132,7 +132,7 @@ class SnowflakeBackend(Backend):
         if not os.path.exists(archive_dir):
             os.makedirs(archive_dir)
 
-        logger.info(f"Sending to {table} data to Snowflake...")
+        logger.info(f"Sending {table} data to Snowflake...")
 
         for idx, nextfile in self.parent.iterate_csv_files(csv_dir):
             logger.debug(f"Loading file: {nextfile}")
@@ -144,11 +144,10 @@ class SnowflakeBackend(Backend):
             self.snow_cursor.execute(f"USE SCHEMA {self.snowsql_schema}")
             logger.debug("PUTing file")
             self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.{self.snowsql_schema}.%{table};")
-            logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table} PATTERN = '{csv}'")
+            logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}")
             for row in self.snow_cursor.execute(f""" 
-                COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table}
+                COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}
                     FILE_FORMAT = (type = csv field_optionally_enclosed_by='\\"' SKIP_HEADER={skip}) ON_ERROR=CONTINUE FORCE=TRUE 
-                    PATTERN = '{csv}'
                 PURGE = TRUE
             """):
                 logger.info(row)
