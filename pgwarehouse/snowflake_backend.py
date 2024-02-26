@@ -43,7 +43,8 @@ class SnowflakeBackend(Backend):
             user=self.snowsql_user,
             password=self.snowsql_pwd,
             account=self.snowsql_account,
-            database=self.snowsql_database
+            database=self.snowsql_database,
+            schema=self.snowsql_schema
             )
         self.snow_cursor = ctx.cursor()
         self.snow_cursor.execute("use warehouse " + self.snowsql_warehouse + "; ")
@@ -109,7 +110,7 @@ class SnowflakeBackend(Backend):
             return colname
 
     def list_tables(self):
-        for row in self.snow_cursor.execute("SHOW TABLES;"):
+        for row in self.snow_cursor.execute(f"SHOW TABLES IN SCHEMA {self.snowsql_schema};"):
             print(row)                              
 
     def load_table(self, table, schema_file, create_table=True, drop_table=False):
