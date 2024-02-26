@@ -74,12 +74,22 @@ class PGWarehouse(PGBackend):
                 if t == tablename:
                     return {}
                 elif isinstance(t, dict) and tablename in t:
-                    return t[tablename]
+                    # remove tablename from the dict, leaving only the options
+                    t.pop(tablename)
+                    return t
             return {'last_modified':last_modified} if last_modified else {}
 
         def get_all_tables():
             if 'tables' in self.config:
-                return self.config['tables']
+                tables = self.config['tables']
+                tables_returned = []
+                for table in tables:
+                    # deal with the case where the tables contain options (thus a dict)
+                    if isinstance(table, dict):
+                        tables_returned.append(list(table.keys())[0])
+                    else:
+                        tables_returned.append(table)
+                return tables_returned
             else:
                 return self.all_table_names()
             
@@ -89,8 +99,8 @@ class PGWarehouse(PGBackend):
             for table in get_all_tables():
                 table_opts = get_table_opts(table)
                 self.table = table
-                self.schema_file = os.path.join(self.data_dir, table + ".schema")
-                logger.info(f">>>>>>>>> {command} {table}")
+                self.schema_file = os.path.join(self.data_dir, self.table + ".schema")
+                logger.info(f">>>>>>>>> {command} {self.table} {table_opts}")
                 try:
                     getattr(self, command)(self.table, table_opts)
                 except RuntimeError:
