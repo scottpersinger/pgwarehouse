@@ -27,25 +27,30 @@ class SnowflakeBackend(Backend):
         self.snowsql_warehouse: str
         self.snowsql_user: str
         self.snowsql_pwd: str
+        self.snowsql_role: str
         self.config = config
         self.parent: PGBackend = parent
         self.setup_env()
         
     def setup_env(self):
-        for key in ['snowsql_account', 'snowsql_database', 'snowsql_schema','snowsql_warehouse','snowsql_user','snowsql_pwd']:
+        for key in ['snowsql_account', 'snowsql_database', 'snowsql_schema','snowsql_warehouse','snowsql_user','snowsql_pwd','snowsql_role']:
             val = self.config.get(key, os.environ.get(key.upper()))
             if val is None:
                 raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
             setattr(self, key, val)
 
         # Gets the version
-        ctx = snowflake.connector.connect(
-            user=self.snowsql_user,
-            password=self.snowsql_pwd,
-            account=self.snowsql_account,
-            database=self.snowsql_database,
-            schema=self.snowsql_schema
-            )
+        connection_config = {
+            'user': self.snowsql_user,
+            'password': self.snowsql_pwd,
+            'account': self.snowsql_account,
+            'database': self.snowsql_database,
+            'schema': self.snowsql_schema
+        }
+        if self.snowsql_role:
+            connection_config.update({'role': self.snowsql_role})
+
+        ctx = snowflake.connector.connect(**connection_config)
         self.snow_cursor = ctx.cursor()
         self.snow_cursor.execute("use warehouse " + self.snowsql_warehouse + "; ")
 
