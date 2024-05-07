@@ -216,7 +216,7 @@ class PGWarehouse(PGBackend):
         self.cursor: psycopg2.extensions.cursor = self.client.cursor()
 
     def list(self) -> None:
-        sql = """
+        sql = f"""
             SELECT table_schema, table_name, pg_size_pretty(total_bytes) AS total, to_char(row_estimate, 'FM999,999,999,999') as rows
             FROM (
             SELECT *, total_bytes-index_bytes-coalesce(toast_bytes,0) AS table_bytes FROM (
@@ -227,7 +227,7 @@ class PGWarehouse(PGBackend):
                         , pg_total_relation_size(reltoastrelid) AS toast_bytes
                     FROM pg_class c
                     LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE relkind = 'r' and nspname='public'
+                    WHERE relkind = 'r' and nspname='{self.pgschema}'
             ) a order by table_bytes desc
             ) a;
         """
@@ -246,7 +246,7 @@ class PGWarehouse(PGBackend):
         return sorted([r[0] for r in self.cursor.fetchall()])
 
     def dump_schema(self, table: str, schema_file: str):
-        ret = os.system(f"psql --pset=format=unaligned -c \"\\d {table}\" > {schema_file}")
+        ret = os.system(f"psql --pset=format=unaligned -c \"\\d {self.pgschema}.{table}\" > {schema_file}")
         if ret != 0:
             raise RuntimeError("Error saving schema")
         logger.debug(f"Saved schema to {schema_file}")
@@ -272,7 +272,7 @@ class PGWarehouse(PGBackend):
             return gzip.open(fname, "wt")
 
         outfile = next_file()
-        cmd = f'psql -c "\\copy (select * from {table} {filter}) to STDOUT CSV HEADER\"'
+        cmd = f'psql -c "\\copy (select * from {self.pgschema}.{table} {filter}) to STDOUT CSV HEADER\"'
         args = shlex.split(cmd)
         proc = subprocess.Popen(args, stdout=subprocess.PIPE)
         for line in iter(proc.stdout.readline, b''):
