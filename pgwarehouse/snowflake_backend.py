@@ -43,7 +43,8 @@ class SnowflakeBackend(Backend):
             user=self.snowsql_user,
             password=self.snowsql_pwd,
             account=self.snowsql_account,
-            database=self.snowsql_database
+            database=self.snowsql_database,
+            schema=self.snowsql_schema
             )
         self.snow_cursor = ctx.cursor()
         self.snow_cursor.execute("use warehouse " + self.snowsql_warehouse + "; ")
@@ -109,7 +110,7 @@ class SnowflakeBackend(Backend):
             return colname
 
     def list_tables(self):
-        for row in self.snow_cursor.execute("SHOW TABLES;"):
+        for row in self.snow_cursor.execute(f"SHOW TABLES IN SCHEMA {self.snowsql_schema};"):
             print(row)                              
 
     def load_table(self, table, schema_file, create_table=True, drop_table=False):
@@ -131,7 +132,7 @@ class SnowflakeBackend(Backend):
         if not os.path.exists(archive_dir):
             os.makedirs(archive_dir)
 
-        logger.info(f"Sending to {table} data to Snowflake...")
+        logger.info(f"Sending {table} data to Snowflake...")
 
         for idx, nextfile in self.parent.iterate_csv_files(csv_dir):
             logger.debug(f"Loading file: {nextfile}")
@@ -143,11 +144,10 @@ class SnowflakeBackend(Backend):
             self.snow_cursor.execute(f"USE SCHEMA {self.snowsql_schema}")
             logger.debug("PUTing file")
             self.snow_cursor.execute(f"PUT file://{nextfile} @{self.snowsql_database}.{self.snowsql_schema}.%{table};")
-            logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table} PATTERN = '{csv}'")
+            logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}")
             for row in self.snow_cursor.execute(f""" 
-                COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @%{table}
+                COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}
                     FILE_FORMAT = (type = csv field_optionally_enclosed_by='\\"' SKIP_HEADER={skip}) ON_ERROR=CONTINUE FORCE=TRUE 
-                    PATTERN = '{csv}'
                 PURGE = TRUE
             """):
                 logger.info(row)
