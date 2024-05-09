@@ -207,8 +207,8 @@ class PGWarehouse(PGBackend):
             os.environ[key.upper()] = val
         self.pgschema = conf.get('pgschema', os.environ.get('PGSCHEMA', 'public'))
         self.pgport = int(conf.get('pgport', os.environ.get('PGPORT', '5432')))
+        self.pgsslmode = conf.get('pgsslmode', os.environ.get('PGSSLMODE', 'preferred'))
         self.max_pg_records = conf.get('max_records', None)
-        self.pgsslmode = conf.get('pgsslmode', 'preferred')
         self.client = psycopg2.connect(
             f"host={self.pghost} dbname={self.pgdatabase} user={self.pguser} password={self.pgpassword} port={self.pgport} sslmode={self.pgsslmode}",
             connect_timeout=10
