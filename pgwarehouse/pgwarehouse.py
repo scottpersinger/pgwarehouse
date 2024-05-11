@@ -133,9 +133,9 @@ class PGWarehouse(PGBackend):
         else:
             print("This will create a pgwarehouse config file in the current directory.")
             backend = None
-            while backend not in ["1", "2"]:
-                backend = input("Choose your warehouse type (Snowflake - 1, Clickhouse - 2): ")
-            backend = ["snowflake", "clickhouse"][int(backend)-1]
+            while backend not in ["1", "2", "3"]:
+                backend = input("Choose your warehouse type (Snowflake - 1, Clickhouse - 2, Duckdb - 3): ")
+            backend = ["snowflake", "clickhouse", "duckdb"][int(backend)-1]
             conf = {
                 "postgres": {
                     'pghost':"",
@@ -149,7 +149,7 @@ class PGWarehouse(PGBackend):
                 }
             }
             if backend == "snowflake":
-                for key in ['snowsql_account',  'snowsql_warehouse', 'snowsql_database', 'snowsql_user', 'snowsql_password']:
+                for key in ['snowsql_account',  'snowsql_warehouse', 'snowsql_database', 'snowsql_user', 'snowsql_pwd']:
                     conf['warehouse'][key] = ""
             elif backend == "clickhouse":
                 for key in ['clickhouse_host', 'clickhouse_database', 'clickhouse_user', 'clickhouse_password']:
@@ -207,7 +207,7 @@ class PGWarehouse(PGBackend):
             os.environ[key.upper()] = val
         self.pgschema = conf.get('pgschema', os.environ.get('PGSCHEMA', 'public'))
         self.pgport = int(conf.get('pgport', os.environ.get('PGPORT', '5432')))
-        self.pgsslmode = conf.get('pgsslmode', os.environ.get('PGSSLMODE', 'preferred'))
+        self.pgsslmode = conf.get('pgsslmode', os.environ.get('PGSSLMODE', 'prefer'))
         self.max_pg_records = conf.get('max_records', None)
         self.client = psycopg2.connect(
             f"host={self.pghost} dbname={self.pgdatabase} user={self.pguser} password={self.pgpassword} port={self.pgport} sslmode={self.pgsslmode}",
