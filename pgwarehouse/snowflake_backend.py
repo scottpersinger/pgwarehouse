@@ -27,13 +27,13 @@ class SnowflakeBackend(Backend):
         self.snowsql_warehouse: str
         self.snowsql_user: str
         self.snowsql_pwd: str
-        self.snowsql_role: str
+        self.snowsql_role: str = None
         self.config = config
         self.parent: PGBackend = parent
         self.setup_env()
         
     def setup_env(self):
-        for key in ['snowsql_account', 'snowsql_database', 'snowsql_schema','snowsql_warehouse','snowsql_user','snowsql_pwd','snowsql_role']:
+        for key in ['snowsql_account', 'snowsql_database', 'snowsql_schema','snowsql_warehouse','snowsql_user','snowsql_pwd']:
             val = self.config.get(key, os.environ.get(key.upper()))
             if val is None:
                 raise RuntimeError(f"Missing {key} in config file or environment ({key.upper()})")
