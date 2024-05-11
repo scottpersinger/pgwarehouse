@@ -18,7 +18,7 @@ class SnowflakeBackend(Backend):
     ###############
     # Snowflake
     ###############
-    RESERVED_COL_NAMES = ['current_date','order','to','from']
+    RESERVED_COL_NAMES = ['current_date','order','to','from','values','start','current']
 
     def __init__(self, config: dict, parent: PGBackend) -> None:
         self.snowsql_account: str
