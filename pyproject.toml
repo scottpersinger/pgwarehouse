@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pgwarehouse"
-version = "0.1.4"
+version = "0.1.5"
 description = "Easily sync your Postgres database to your data warehouse."
 authors = ["Scott Persinger <scottpersinger@gmail.com>"]
 readme = "README.md"
