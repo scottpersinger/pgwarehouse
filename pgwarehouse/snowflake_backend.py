@@ -152,7 +152,7 @@ class SnowflakeBackend(Backend):
             logger.info(f"COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}")
             for row in self.snow_cursor.execute(f""" 
                 COPY INTO {self.snowsql_database}.{self.snowsql_schema}.{table} FROM @{self.snowsql_database}.{self.snowsql_schema}.%{table}/{csv}
-                    FILE_FORMAT = (type = csv field_optionally_enclosed_by='\\"' SKIP_HEADER={skip}) ON_ERROR=CONTINUE FORCE=TRUE 
+                    FILE_FORMAT = (type = csv field_optionally_enclosed_by='\\"' SKIP_HEADER={skip} ESCAPE_UNENCLOSED_FIELD = NONE) ON_ERROR=CONTINUE FORCE=TRUE 
                 PURGE = TRUE
             """):
                 logger.info(row)
