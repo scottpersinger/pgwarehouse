@@ -1,3 +1,11 @@
+# 🚨 **Important notice** 🚨
+
+I'm afraid I have no time to support this library. I'm a bit busy being CEO over at [Supercog.ai](https://supercog.ai). (Come over and 
+sign up for our beta to get a smart AI assistant right in Slack 😁). If anyone wants to take this over this project please
+let me know. I can transfer the repo or just give you ownership of the Pypi package.
+
+-------------
+
 # pgwarehouse - quickly sync Postgres data to your cloud warehouse
 
 ## Introduction
